@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id         String     @id @default(cuid())
+  name       String
+  ownerName  String
+  ownerPhone String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  customers  Customer[]
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  name       String
+  phone      String
+  email      String?
+  businessId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id])
+}
