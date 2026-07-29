@@ -15,7 +15,5 @@ export class UpdateCustomerDto extends PartialType(CreateCustomerDto) {
     @IsOptional()
     email ?:string
     
-    @IsString()
-    @IsNotEmpty()
-    businessId !:string
+    
 }

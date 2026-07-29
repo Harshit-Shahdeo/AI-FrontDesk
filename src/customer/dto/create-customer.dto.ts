@@ -14,7 +14,5 @@ phone !:string;
 @IsOptional()
 email ?:string
 
-@IsString()
-@IsNotEmpty()
-businessId !:string
+
 }

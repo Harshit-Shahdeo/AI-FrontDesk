@@ -9,33 +9,69 @@ export class CustomerService {
   constructor(private readonly prisma:PrismaService){}
 
 
-  async create(createCustomerDto: CreateCustomerDto) {
+  async create(createCustomerDto: CreateCustomerDto,
+    businessId:string
+  ) {
     const business = await this.prisma.business.findUnique({
       where:{
-        id:createCustomerDto.businessId,
+        id:businessId,
       },
     });
     if(!business){
       throw new NotFoundException('Business not found')
     }
     return this.prisma.customer.create({
-      data: createCustomerDto,
+      data:{
+        ...createCustomerDto,
+        businessId
+      }
     });
   }
 
-  findAll() {
-    return `This action returns all customer`;
+  async findAll(businessId:string) {
+    return this.prisma.customer.findMany({
+      where:{
+        businessId,
+      }
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} customer`;
+  async findOne(customerId:string, businessId:string) {
+    const customer = await this.prisma.customer.findFirst({
+      where:{
+        id:customerId,
+        businessId,
+      },
+    });
+
+    if(!customer){
+      throw new NotFoundException('Customer Not Found')
+    }
+    return customer;
   }
 
-  update(id: number, updateCustomerDto: UpdateCustomerDto) {
-    return `This action updates a #${id} customer`;
+  async update(customerId: string, updateCustomerDto: UpdateCustomerDto, businessId:string) {
+    await this.findOne(customerId, businessId);
+
+    return this.prisma.customer.update({
+      where:{
+        id: customerId,
+      
+      },
+      data:updateCustomerDto
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} customer`;
+  async remove(customerId:string, businessId:string) {
+    await this.findOne(customerId, businessId);
+
+    return this.prisma.customer.delete({
+      where:{
+        id:customerId
+      }
+    })
+
+
+
   }
 }

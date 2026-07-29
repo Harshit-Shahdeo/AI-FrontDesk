@@ -1,34 +1,35 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { Business } from 'src/business/entities/business.entity';
 
-@Controller('customer')
+@Controller('businesses/:businessId/customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
   @Post()
-  create(@Body() createCustomerDto: CreateCustomerDto) {
-    return this.customerService.create(createCustomerDto);
+  create(@Param('businessId') businessId:string, @Body() createCustomerDto: CreateCustomerDto) {
+    return this.customerService.create(createCustomerDto, businessId);
   }
 
   @Get()
-  findAll() {
-    return this.customerService.findAll();
+  findAll(@Param('businessId') businessId:string) {
+    return this.customerService.findAll(businessId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.customerService.findOne(+id);
+  @Get(':customerId')
+  findOne(@Param('customerId') customerId: string, @Param('businessId') businessId:string) {
+    return this.customerService.findOne(customerId, businessId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCustomerDto: UpdateCustomerDto) {
-    return this.customerService.update(+id, updateCustomerDto);
+  @Put(':customerId')
+  update(@Param('customerId') customerId: string, @Body() updateCustomerDto: UpdateCustomerDto, @Param('businessId')businessId:string) {
+    return this.customerService.update(customerId, updateCustomerDto, businessId);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.customerService.remove(+id);
+  @Delete(':customerId')
+  remove(@Param('customerId') customerId: string,@Param('businessId') bsuinessId:string) {
+    return this.customerService.remove(customerId, bsuinessId);
   }
 }
