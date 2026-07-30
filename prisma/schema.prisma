@@ -15,6 +15,7 @@ model Business {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   customers  Customer[]
+  services   Service[]
 }
 
 model Customer {
@@ -28,4 +29,19 @@ model Customer {
   business   Business @relation(fields: [businessId], references: [id])
 
   @@unique([id, businessId])
+}
+
+model Service{
+  id            String  @id @default(cuid())
+  name          String 
+  description   String?
+  duration      Int
+  price         Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

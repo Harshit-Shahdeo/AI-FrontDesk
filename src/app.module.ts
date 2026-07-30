@@ -6,9 +6,10 @@ import { BusinessModule } from './business/business.module';
 import { CustomerService } from './customer/customer.service';
 import { CustomerController } from './customer/customer.controller';
 import { CustomerModule } from './customer/customer.module';
+import { ServiceModule } from './service/service.module';
 
 @Module({
-  imports: [PrismaModule, BusinessModule, CustomerModule],
+  imports: [PrismaModule, BusinessModule, CustomerModule, ServiceModule],
   controllers: [AppController, CustomerController],
   providers: [AppService, CustomerService],
 })
