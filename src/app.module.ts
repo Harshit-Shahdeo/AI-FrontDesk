@@ -7,9 +7,10 @@ import { CustomerService } from './customer/customer.service';
 import { CustomerController } from './customer/customer.controller';
 import { CustomerModule } from './customer/customer.module';
 import { ServiceModule } from './service/service.module';
+import { AppointmentModule } from './appointment/appointment.module';
 
 @Module({
-  imports: [PrismaModule, BusinessModule, CustomerModule, ServiceModule],
+  imports: [PrismaModule, BusinessModule, CustomerModule, ServiceModule, AppointmentModule],
   controllers: [AppController, CustomerController],
   providers: [AppService, CustomerService],
 })
