@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateCustomerDto } from 'src/customer/dto/create-customer.dto';
+import { AppointmentStatus } from '@prisma/client';
 
 @Injectable()
 export class AppointmentService {
@@ -12,36 +12,41 @@ export class AppointmentService {
     createAppointmentDto: CreateAppointmentDto,
     businessId: string,
   ) {
-    
-    const business = await this.getBusiness(businessId);
+    await this.getBusiness(businessId);
 
-    const customer = await this.getCustomer(createAppointmentDto.customerId, businessId )
-    
-    const service = await this.getService(createAppointmentDto.serviceId, businessId);
-   
-
-    const appointmentAt = new Date(createAppointmentDto.appointmentAt);
-
-    const appointmentEndAt = new Date(
-      appointmentAt.getTime() + service.duration * 60 * 1000,
+    const customer = await this.getCustomer(
+      createAppointmentDto.customerId,
+      businessId,
     );
 
-  const availability = await this.validateAppointmentTime(
-  businessId,
-  appointmentAt,
-  appointmentEndAt,
+    const service = await this.getService(
+      createAppointmentDto.serviceId,
+      businessId,
     );
-    if(!availability.available){
+
+    const requestedStart = new Date(createAppointmentDto.appointmentAt);
+
+    const requestedEnd = new Date(
+      requestedStart.getTime() + service.duration * 60 * 1000,
+    );
+
+    const slot = await this.findNextAvailableSlot(
+      businessId,
+      requestedStart,
+      requestedEnd,
+    );
+
+    if (!slot.exactMatch) {
       throw new BadRequestException({
-        message:'Requested time slot is unavialble.',
-        nextAvailable:availability.nextAvailable,
+        message: 'Requested time slot is unavailable.',
+        nextAvailable: slot.scheduledStart,
       });
     }
-   
+
     return this.prisma.appointment.create({
       data: {
-        appointmentAt,
-        appointmentEndAt,
+        appointmentAt: slot.scheduledStart,
+        appointmentEndAt: slot.scheduledEnd,
 
         duration: service.duration,
         price: service.price,
@@ -53,86 +58,91 @@ export class AppointmentService {
     });
   }
 
-   private async validateAppointmentTime(
-      businessId:string,
-      appointmentAt:Date,
-      appointmentEndAt:Date,
-      appointmentId?: string,
+  private async findNextAvailableSlot(
+    businessId: string,
+    requestedStart: Date,
+    requestedEnd: Date,
+    appointmentId?: string,
+  ): Promise<{
+    exactMatch: boolean;
+    scheduledStart: Date;
+    scheduledEnd: Date;
+  }> {
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        businessId,
 
-    ):Promise<{
-      available:boolean;
-      start?:Date;
-      nextAvailable?:Date;
-    }>{
-       const appointments = await this.prisma.appointment.findMany({
-        where:{
-          businessId,
-
-          appointmentEndAt:{
-            gte:appointmentAt,
-          },
-          NOT:appointmentId
-          ?{
-            id:appointmentId,
-          }
-          :undefined,
+        appointmentEndAt: {
+          gte: requestedStart,
         },
-        orderBy:{
-          appointmentAt:'asc',
-        }
-       });
 
-       let candidateStart = appointmentAt;
+        NOT: appointmentId
+          ? {
+              id: appointmentId,
+            }
+          : undefined,
+      },
 
-       for(const appointment of appointments){
-         const candidateEnd = new Date(candidateStart.getTime() + 
-        (appointmentEndAt.getTime() - appointmentAt.getTime()),
+      orderBy: {
+        appointmentAt: 'asc',
+      },
+    });
+
+    const durationMs =
+      requestedEnd.getTime() - requestedStart.getTime();
+
+    let currentStart = requestedStart;
+
+    for (const appointment of appointments) {
+      const currentEnd = new Date(
+        currentStart.getTime() + durationMs,
       );
-      if(candidateEnd <= appointment.appointmentAt){
-          return{
-            available:true,
-            nextAvailable:candidateStart,
-          };
-        }
 
-      if(candidateStart < appointment.appointmentEndAt &&
-        candidateEnd > appointment.appointmentAt
-      ){
-
-        candidateStart = appointment.appointmentEndAt;
-        
-        
-      }
-       }
-
-       if(candidateStart.getTime() === appointmentAt.getTime()){
-        return{
-          available:true,
-          start:candidateStart,
+      // Found a free gap before this appointment
+      if (currentEnd <= appointment.appointmentAt) {
+        return {
+          exactMatch:
+            currentStart.getTime() === requestedStart.getTime(),
+          scheduledStart: currentStart,
+          scheduledEnd: currentEnd,
         };
-       }
+      }
 
-       return{
-        available:false,
-        nextAvailable:candidateStart,
-       };
+      // Overlapping appointment, move candidate start forward
+      if (
+        currentStart < appointment.appointmentEndAt &&
+        currentEnd > appointment.appointmentAt
+      ) {
+        currentStart = appointment.appointmentEndAt;
+      }
     }
 
-private async getBusiness(businessId: string) {
-  const business = await this.prisma.business.findUnique({
-    where: {
-      id: businessId,
-    },
-  });
-
-  if (!business) {
-    throw new NotFoundException('Business not found');
+    return {
+      exactMatch:
+        currentStart.getTime() === requestedStart.getTime(),
+      scheduledStart: currentStart,
+      scheduledEnd: new Date(currentStart.getTime() + durationMs),
+    };
   }
 
-  return business;
-}
+  private async getBusiness(businessId: string) {
+    const business = await this.prisma.business.findUnique({
+      where: {
+        id: businessId,
+      },
+    });
 
-private async getCustomer(customerId:string, businessId:string, ){
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    return business;
+  }
+
+  private async getCustomer(
+    customerId: string,
+    businessId: string,
+  ) {
     const customer = await this.prisma.customer.findFirst({
       where: {
         id: customerId,
@@ -145,10 +155,13 @@ private async getCustomer(customerId:string, businessId:string, ){
     }
 
     return customer;
-}
+  }
 
-private async getService(serviceId:string, businessId:string){
-  const service = await this.prisma.service.findFirst({
+  private async getService(
+    serviceId: string,
+    businessId: string,
+  ) {
+    const service = await this.prisma.service.findFirst({
       where: {
         id: serviceId,
         businessId,
@@ -164,7 +177,7 @@ private async getService(serviceId:string, businessId:string){
     }
 
     return service;
-}
+  }
 
   findAll(businessId: string) {
     return this.prisma.appointment.findMany({
@@ -174,15 +187,92 @@ private async getService(serviceId:string, businessId:string){
     });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} appointment`;
+  async findOne(id: string, businessId:string) {
+    const appointment = await  this.prisma.appointment.findFirst({
+      where:{
+        id,
+        businessId,
+      }
+    });
+    if(!appointment){
+      throw new NotFoundException('Appointment not found')
+    }
+
+    return appointment;
   }
 
-  update(id: number, updateAppointmentDto: UpdateAppointmentDto) {
-    return `This action updates a #${id} appointment`;
+  async update(id: string, businessId:string, updateAppointmentDto: UpdateAppointmentDto) {
+
+   // Do not remove the variable, keep it even if umused 
+   const appointment = await this.findOne(id,businessId );
+
+   if(appointment.status !== AppointmentStatus.SCHEDULED){
+    throw new BadRequestException('Only scheduled appointmnets can be updated')
+   }
+   
+   const customer = await this.getCustomer(updateAppointmentDto.customerId, businessId);
+   
+   const service = await this.getService(updateAppointmentDto.serviceId, businessId);
+
+   const requestedStart = new Date(updateAppointmentDto.appointmentAt);
+
+   const requestedEnd = new Date(requestedStart.getTime() + service.duration * 60 * 1000,);
+
+   const slot = await this.findNextAvailableSlot(businessId, requestedStart, requestedEnd, id);
+
+   if(!slot.exactMatch){
+    throw new BadRequestException({
+      message:'Requested Time is Unavailable',
+      nextAvailable:slot.scheduledStart,
+    })
+   }
+
+   return this.prisma.appointment.update({
+    where:{
+      id,
+    },
+    data:{ appointmentAt : slot.scheduledStart,
+           appointmentEndAt:slot.scheduledEnd,
+
+           duration: service.duration,
+           price:    service.price,
+
+              
+           customerId: customer.id,
+           serviceId: service.id,
+
+    }
+   })
+
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} appointment`;
+  async remove(id: string, businessId:string) {
+   const appointment =  await this.findOne(id, businessId);
+  
+   switch (appointment.status) {
+  case AppointmentStatus.CANCELLED:
+    throw new BadRequestException(
+      'Appointment is already cancelled.',
+    );
+
+  case AppointmentStatus.COMPLETED:
+    throw new BadRequestException(
+      'Completed appointments cannot be cancelled.',
+    );
+
+  case AppointmentStatus.NO_SHOW:
+    throw new BadRequestException(
+      'No-show appointments cannot be cancelled.',
+    );
+}
+   
+    return this.prisma.appointment.update({
+      where:{
+        id,
+      },
+      data:{
+        status:AppointmentStatus.CANCELLED,
+      }
+    })
   }
 }
