@@ -179,6 +179,8 @@ export class AppointmentService {
     return service;
   }
 
+  
+
   findAll(businessId: string) {
     return this.prisma.appointment.findMany({
       where: {

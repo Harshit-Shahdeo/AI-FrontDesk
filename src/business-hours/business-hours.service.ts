@@ -156,21 +156,38 @@ export class BusinessHoursService {
     });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} businessHour`;
-  }
+ async update(businessId:string, updateBusinessHourDto: UpdateBusinessHourDto) {
+  await this.getBusiness(businessId);
 
- async update(businessid:string, updateBusinessHourDto: UpdateBusinessHourDto) {
+  this.validateDuplicateDays(updateBusinessHourDto);
 
+  const updated: number [] = [];
+  const failed :{
+    dayOfWeek:number;
+    reason:string;
+  }[] = [];
+  
   for(const hour of updateBusinessHourDto.hours){
-   const  existingHour = await this.findExistingHour(businessid, hour);
+    try{
+      this.validateBusinessHour(hour);
 
-   if(existingHour){
-   await this.updateExistingHour(existingHour.id, hour);
-   }else{
-    await this.createNewHour(businessid, hour);
-   }
+      await this.processingSingleDayUpdate(businessId, hour);
+      updated.push(hour.dayOfWeek);
+    }catch(error){
+      failed.push({
+        dayOfWeek:hour.dayOfWeek,
+        reason:
+        error instanceof Error? error.message :'Unknown error'
+      })
+    }
+    
   }
+
+  return{
+    message: 'Business hours processed,',
+    updated,
+    failed
+  };
     
   }
   private async findExistingHour(businessId:string, hour:BusinessHoursDayDto){
@@ -183,20 +200,26 @@ export class BusinessHoursService {
 
   }
 
-  private async updateExistingHour(businessid:string,hour:BusinessHoursDayDto){
+  private async updateExistingHour(
+  businessHourId: string,
+  hour: BusinessHoursDayDto,
+) {
+  await this.prisma.businessHours.update({
+    where: {
+      id: businessHourId,
+    },
+    data: {
+      isOpen: hour.isOpen,
+      opensAtMinutes: hour.opensAtMinutes,
+      closesAtMinutes: hour.closesAtMinutes,
+    },
+  });
 
-    await this.getBusiness(businessid);
-    return await this.prisma.businessHours.update({
-      where:{
-        id:businessid,
-      },
-      data:{
-        isOpen:hour.isOpen,
-        opensAtMinutes: hour.opensAtMinutes,
-        closesAtMinutes:hour.closesAtMinutes
-      },
-    })
-  }
+  await this.replaceBreakPeriods(
+    businessHourId, 
+    hour,
+  );
+}
 
   private async createNewHour(businessId:string, hour:BusinessHoursDayDto){
     return this.prisma.businessHours.create({
@@ -239,6 +262,17 @@ export class BusinessHoursService {
     })),
   });
 }
+
+private async processingSingleDayUpdate(businessId:string, hour:BusinessHoursDayDto){
+   const  existingHour = await this.findExistingHour(businessId, hour);
+
+   if(existingHour){
+   await this.updateExistingHour(existingHour.id, hour);
+   }else{
+    await this.createNewHour(businessId, hour);
+   }
+  }
+
 
 
   
