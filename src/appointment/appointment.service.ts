@@ -3,6 +3,7 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentStatus } from '@prisma/client';
+import { BusinessHour } from 'src/business-hours/entities/business-hour.entity';
 
 @Injectable()
 export class AppointmentService {
@@ -26,9 +27,9 @@ export class AppointmentService {
 
     const requestedStart = new Date(createAppointmentDto.appointmentAt);
 
-    const requestedEnd = new Date(
-      requestedStart.getTime() + service.duration * 60 * 1000,
-    );
+    const requestedEnd = this.calculateMinutes(requestedStart, service);
+
+    await this.validateBusinessAvailability(businessId, requestedStart, requestedEnd);
 
     const slot = await this.findNextAvailableSlot(
       businessId,
@@ -179,6 +180,61 @@ export class AppointmentService {
     return service;
   }
 
+  private calculateMinutes(requestedStart:Date, service:{duration:number}) :Date{
+    return new Date(requestedStart.getTime() + service.duration * 60 * 1000 );
+  };
+
+  private async validateBusinessAvailability(businessId : string, requestedStart:Date, requestedEnd:Date){
+     const jsDay = requestedStart.getDay();
+
+     const dayOfWeek = jsDay === 0?7:jsDay;
+
+     const businessHour = await this.prisma.businessHours.findFirst({
+      where:{
+        businessId,
+        dayOfWeek,
+      },
+      include:{
+        breakPeriods:true,
+      }
+     });
+     
+if(!businessHour || !businessHour.isOpen){
+  throw new BadRequestException('Business is closed on the requested date ');
+};
+
+const startMinutes = requestedStart.getHours() * 60 + requestedStart.getMinutes();
+const endMinutes = requestedEnd.getHours() * 60 + requestedEnd.getMinutes();
+  
+
+const outsideBusinessHours = (startMinutes < businessHour.opensAtMinutes  || 
+                             endMinutes > businessHour.closesAtMinutes);
+
+
+if(outsideBusinessHours){
+  throw new BadRequestException(`Please book appointments within business hours that is from ${this.formatMinutes(businessHour.opensAtMinutes)} to ${this.formatMinutes(businessHour.closesAtMinutes)}`)
+}
+
+
+    for(const breakPeriod of businessHour.breakPeriods){
+      const overlap = startMinutes < breakPeriod.endsAtMinutes && endMinutes > breakPeriod.startsAtMinutes;
+
+      if(overlap){
+        throw new BadRequestException(`Your current request is under business's break periods,
+            break lasts from ${this.formatMinutes(breakPeriod.startsAtMinutes)} to
+             ${this.formatMinutes(breakPeriod.endsAtMinutes)}`);
+      }
+    }
+   
+
+  }
+
+  private formatMinutes(minutes:number){
+    const hour = Math.floor(minutes/60);
+    const mins = minutes%60;
+
+    return `${hour.toString().padStart(2, '0')}:${mins.toString().padStart(2,'0')}`;
+  }
   
 
   findAll(businessId: string) {
@@ -219,6 +275,8 @@ export class AppointmentService {
    const requestedStart = new Date(updateAppointmentDto.appointmentAt);
 
    const requestedEnd = new Date(requestedStart.getTime() + service.duration * 60 * 1000,);
+
+   await this.validateBusinessAvailability(businessId, requestedStart, requestedEnd);
 
    const slot = await this.findNextAvailableSlot(businessId, requestedStart, requestedEnd, id);
 
