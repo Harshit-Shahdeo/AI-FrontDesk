@@ -1,27 +1,34 @@
-import { Injectable } from "@nestjs/common";
-import { IncomingMessageDto } from "../dto/incoming-message.dto";
-
+import { Injectable } from '@nestjs/common';
+import { IncomingMessageDto } from '../dto/incoming-message.dto';
+import { MetaWebhookBody } from '../interface/webhook-interfaces';
 @Injectable()
+export class WhatsAppMessageParser {
+  parse(body: MetaWebhookBody): IncomingMessageDto[] {
+    const incomingMessages: IncomingMessageDto[] = [];
 
-export class whatsAppMessageParser{
-    parse(body: any): IncomingMessageDto | null{
-        const message = body.entry[0].changes[0].value.messages[0];
-       
-     if(!message){
-        return null;
-     }
+    for (const entry of body.entry) {
+      for (const change of entry.changes) {
+        if (!change.value.messages) {
+          continue;
+        }
 
-     if(message.type !=='text'){
-        return null;
-     }
+        for (const message of change.value.messages) {
+          if (message.type !== 'text' || !message.text) {
+            continue;
+          }
 
-        return{
-            phoneNumber:message.from,
-            message : message.text.body,
+          incomingMessages.push({
+            phoneNumber: message.from,
+            message: message.text.body,
             messageId: message.id,
             timeStamp: new Date(
-                Number(message.timeStamp) * 1000,
+              Number(message.timestamp) * 1000,
             ),
-        };
+          });
+        }
+      }
     }
+
+    return incomingMessages;
+  }
 }

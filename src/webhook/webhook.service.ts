@@ -1,21 +1,25 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { whatsAppMessageParser } from './parser/whatsapp-message.parser';
+import { WhatsAppMessageParser } from './parser/whatsapp-message.parser';
 import { webhookVerificationParser } from './parser/webhook-verification.parser';
+import { Logger } from '@nestjs/common';
+
 
 @Injectable()
 export class WebhookService {
-    constructor(private readonly Messageparser : whatsAppMessageParser,
-                private readonly verificationParser :webhookVerificationParser,
-    ){}
-
+    constructor(private readonly messageparser : WhatsAppMessageParser,
+                private readonly verificationParser :webhookVerificationParser,    ){}
+  
+    private readonly logger = new Logger(WebhookService.name);
     receiveMessage(body:any){
-        const incomingMessage = this.Messageparser.parse(body);
+        const incomingMessage = this.messageparser.parse(body);
 
-        if(!incomingMessage){
+        if(incomingMessage.length == 0){
             return 'EVENT_RECEIVED';
         }
+     for(const message of incomingMessage){
 
-        console.log(incomingMessage);
+        this.logger.log(message);
+     }
 
         return 'EVENT_RECEIVED';
     }
@@ -29,7 +33,7 @@ export class WebhookService {
             );
         }
 
-        if(verification.mode === 'subscribe',
+        if(verification.mode === 'subscribe' &&
             verification.verifyToken === process.env.WHATSAPP_VERIFY_TOKEN
         ){
             return verification.challenge;
