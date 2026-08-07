@@ -7,12 +7,12 @@ export class WebhookController {
 
     @Get()
     verifyWebhook(@Query() query:any){
-      return this.verifyWebhook(query);
+      return this.webhookservice.verifyWebhook(query);
     }
     
     @Post()
     receiveMessage(@Body() body:any){
-     return this.receiveMessage(body);
+     return this.webhookservice.receiveMessage(body);
 
     }
 }
