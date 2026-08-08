@@ -20,90 +20,103 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum ConversationStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum MessageSender {
+  CUSTOMER
+  AI
+  SYSTEM
+}
+
 model Business {
-  id             String @id @default(cuid())
+  id String @id @default(cuid())
 
-  name           String
-  ownerName      String
-  ownerPhone     String
+  name       String
+  ownerName  String
+  ownerPhone String
 
-  status         BusinessStatus @default(ACTIVE)
+  status BusinessStatus @default(ACTIVE)
 
-  customers      Customer[]
-  services       Service[]
-  appointments   Appointment[]
-  businessHours  BusinessHours[]
+  customers     Customer[]
+  services      Service[]
+  appointments  Appointment[]
+  businessHours BusinessHours[]
+  conversations Conversation[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Customer {
-  id             String @id @default(cuid())
+  id String @id @default(cuid())
 
-  name           String
-  phone          String
-  email          String?
+  name  String
+  phone String
+  email String?
 
-  businessId     String
-  business       Business @relation(fields: [businessId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 
-  appointments   Appointment[]
+  appointments  Appointment[]
+  conversations Conversation[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([id, businessId])
 }
 
 model Service {
-  id             String @id @default(cuid())
+  id String @id @default(cuid())
 
-  name           String
-  description    String?
+  name        String
+  description String?
 
-  duration       Int
-  price          Decimal @db.Decimal(10, 2)
+  duration Int
+  price    Decimal @db.Decimal(10, 2)
 
-  isActive       Boolean @default(true)
+  isActive Boolean @default(true)
 
-  businessId     String
-  business       Business @relation(fields: [businessId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 
-  appointments   Appointment[]
+  appointments Appointment[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Appointment {
-  id               String @id @default(cuid())
+  id String @id @default(cuid())
 
   appointmentAt    DateTime
   appointmentEndAt DateTime
 
-  duration         Int
-  price            Decimal @db.Decimal(10, 2)
+  duration Int
+  price    Decimal @db.Decimal(10, 2)
 
-  status           AppointmentStatus @default(SCHEDULED)
+  status AppointmentStatus @default(SCHEDULED)
 
-  businessId       String
-  customerId       String
-  serviceId        String
+  businessId String
+  customerId String
+  serviceId  String
 
-  business         Business @relation(fields: [businessId], references: [id])
-  customer         Customer @relation(fields: [customerId], references: [id])
-  service          Service @relation(fields: [serviceId], references: [id])
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model BusinessHours {
-  id               String @id @default(cuid())
+  id String @id @default(cuid())
 
-  businessId       String
-  business         Business @relation(fields: [businessId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 
   /// ISO-8601
   /// 1 = Monday
@@ -113,30 +126,74 @@ model BusinessHours {
   /// 5 = Friday
   /// 6 = Saturday
   /// 7 = Sunday
-  dayOfWeek        Int
+  dayOfWeek Int
 
-  isOpen           Boolean @default(true)
+  isOpen Boolean @default(true)
 
-  opensAtMinutes   Int
-  closesAtMinutes  Int
+  opensAtMinutes  Int
+  closesAtMinutes Int
 
-  breakPeriods     BusinessBreak[]
+  breakPeriods BusinessBreak[]
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([businessId, dayOfWeek])
 }
 
 model BusinessBreak {
-  id                  String @id @default(cuid())
+  id String @id @default(cuid())
 
-  businessHoursId     String
-  businessHours       BusinessHours @relation(fields: [businessHoursId], references: [id])
+  businessHoursId String
+  businessHours   BusinessHours @relation(fields: [businessHoursId], references: [id])
 
-  startsAtMinutes     Int
-  endsAtMinutes       Int
+  startsAtMinutes Int
+  endsAtMinutes   Int
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id String @id @default(cuid())
+
+  businessId String
+  customerId String
+
+  status ConversationStatus @default(ACTIVE)
+
+  startedAt     DateTime @default(now())
+  lastMessageAt DateTime
+  expiresAt     DateTime
+
+  summary String?
+
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, customerId, status])
+  @@index([customerId, lastMessageAt])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  conversationId String
+
+  sender  MessageSender
+  content String
+
+  providerMessageId String?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([providerMessageId])
 }

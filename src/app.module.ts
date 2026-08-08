@@ -10,9 +10,10 @@ import { ServiceModule } from './service/service.module';
 import { AppointmentModule } from './appointment/appointment.module';
 import { BusinessHoursModule } from './business-hours/business-hours.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { ConversationModule } from './conversation/conversation.module';
 
 @Module({
-  imports: [PrismaModule, BusinessModule, CustomerModule, ServiceModule, AppointmentModule, BusinessHoursModule, WebhookModule],
+  imports: [PrismaModule, BusinessModule, CustomerModule, ServiceModule, AppointmentModule, BusinessHoursModule, WebhookModule, ConversationModule],
   controllers: [AppController, CustomerController],
   providers: [AppService, CustomerService],
 })
